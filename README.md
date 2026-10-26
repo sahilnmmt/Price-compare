@@ -36,6 +36,7 @@ when:
 Needs Node.js 22.18 or newer. The server is plain TypeScript, run directly by Node.
 
 ```sh
+git clone https://github.com/sahilnmmt/pricecompare.git
 cd pricecompare
 npm install
 npm run build      # build the web app into dist/
@@ -57,7 +58,7 @@ Settings (environment variables):
 npm test           # price/title parsing, matching, comparison maths, page reading, API
 npm run test:e2e   # drives the app in Chromium; screenshots in test-results/e2e
 ```
-CI runs both (`.github/workflows/pricecompare.yml`).
+CI runs both (`.github/workflows/ci.yml`).
 
 ## How it works
 - `src/shared/`: code used by both the server and the browser.
