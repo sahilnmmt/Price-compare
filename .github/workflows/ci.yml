@@ -52,7 +52,6 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: gradle
-      - uses: android-actions/setup-android@v3
 
       # Until a release key is set up (README), builds use a debug key. Keeping
       # it in the cache keeps the signature the same between builds, so each
