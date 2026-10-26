@@ -32,7 +32,49 @@ when:
    plus Open Graph tags, and has a dedicated reader for Amazon. If a shop shows
    a captcha, you can add that offer by hand and it is still compared.
 
-## Run it
+## Android app
+**Download:** on your phone, open
+https://github.com/sahilnmmt/Price-compare/releases/tag/app-latest and tap
+`price-compare.apk`. Open the downloaded file. Android asks once to allow
+installs from your browser; allow it, then tap **Install**. Every push to `main`
+builds a new APK there.
+
+The app needs no server: search and link reading run on the phone. It reads
+shop pages with the phone's own HTTP client, so links work even where a
+website's browser security would block them.
+
+### Building it yourself
+Needs Node.js 22.18+, JDK 21 and the Android SDK (or Android Studio).
+```sh
+npm install
+npm run build
+npx cap sync android
+cd android && ./gradlew assembleRelease   # app/build/outputs/apk/release/app-release.apk
+```
+To edit or run it from Android Studio, use `npx cap open android`. Run
+`node tools/android-assets.mjs` after changing the icon design.
+
+### Release signing key (recommended, one-time)
+Until you add a key, CI signs the APK with a debug key that it keeps in its
+cache. If that cache is cleared (after 7 days without a build), the next APK
+has a different signature, so you have to uninstall the old app before
+installing it. To sign with your own permanent key:
+1. Create a key on your computer (keep the file and the passwords safe):
+   ```sh
+   keytool -genkeypair -v -keystore release.jks -alias pricecompare -keyalg RSA -keysize 2048 -validity 10000
+   base64 -w0 release.jks > release.jks.b64     # macOS: base64 -i release.jks -o release.jks.b64
+   ```
+2. In the GitHub repository, open *Settings → Secrets and variables → Actions*
+   and add four **secrets**:
+   - `ANDROID_KEYSTORE_BASE64`: the contents of `release.jks.b64`;
+   - `ANDROID_KEYSTORE_PASSWORD`;
+   - `ANDROID_KEY_ALIAS`: `pricecompare`;
+   - `ANDROID_KEY_PASSWORD`: the same as the keystore password unless you chose another.
+
+   Changing to this key changes the signature, so uninstall the app once before
+   installing the first APK signed with it.
+
+## Run the website
 Needs Node.js 22.18 or newer. The server is plain TypeScript, run directly by Node.
 
 ```sh
@@ -61,12 +103,15 @@ npm run test:e2e   # drives the app in Chromium; screenshots in test-results/e2e
 CI runs both (`.github/workflows/ci.yml`).
 
 ## How it works
-- `src/shared/`: code used by both the server and the browser.
+- `src/shared/`: code used by the server, the website and the Android app.
   - `text.ts`: parses prices, ratings and counts in Indian, US and European formats, and reads variants from titles.
   - `match.ts`: decides when two listings are the same product. It uses model
     numbers first. It then compares titles, with words near the start counting
     more. Listings that differ in storage, size or model line (Pro, Max,
     Ultra…) are never grouped.
+  - `service.ts`: search and compare-links, used by both the server and the phone.
+  - `extract.ts`: reads product pages (JSON-LD, microdata, Open Graph and Amazon).
+  - `sources/`: searchable sources. Only the sample catalogue ships today.
   - `compare.ts`: works out the price differences, the review-adjusted rating, the value score, the badges and the warnings.
 - `src/server/`
   - `app.ts`: the HTTP API (`GET /api/search?q=`, `POST /api/compare-links`) and serves the built web app.
@@ -74,9 +119,9 @@ CI runs both (`.github/workflows/ci.yml`).
     addresses (checked at connect time, so DNS tricks can't reach your network)
     and limits redirects, page size and time. Each client may read at most 30
     links a minute, and pages are cached for 10 minutes.
-  - `extract.ts`: reads product pages (JSON-LD, microdata, Open Graph and Amazon).
-  - `sources/`: searchable sources. Only the sample catalogue ships today.
 - `src/web/`: the browser app (no framework). It works on phones and in dark mode.
+  `backend.ts` talks to the server; `deviceBackend.ts` does the same work on the phone.
+- `android/`: the Android project (Capacitor), which wraps the web app.
 
 ## Adding live sources
 Shops don't allow scraping their search results, and they block it quickly.
@@ -85,8 +130,9 @@ Live search should therefore use official APIs:
 - **Flipkart:** the Flipkart Affiliate API.
 - **Other shops:** an affiliate network's product feed (for example Cuelinks, EarnKaro or Admitad).
 
-To add one, write a `Source` (`src/server/sources/source.ts`) whose `search()`
-returns `Listing`s, and add it in `sources/index.ts`. Grouping, comparison and
+To add one, write a `Source` (`src/shared/sources/source.ts`) whose `search()`
+returns `Listing`s. Add it in `src/server/sources/index.ts` for the website,
+and in `src/web/deviceBackend.ts` for the app. Grouping, comparison and
 the UI work unchanged.
 
 ## Limits

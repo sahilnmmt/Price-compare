@@ -10,8 +10,10 @@ import http from 'node:http';
 import https from 'node:https';
 import { BlockList, isIP, type LookupFunction } from 'node:net';
 import zlib from 'node:zlib';
+import { UserError } from '../shared/errors.ts';
+import { BROWSER_HEADERS, checkPageResponse, MAX_REDIRECTS, PAGE_TIMEOUT_MS } from '../shared/pageRequest.ts';
 
-export class FetchError extends Error {}
+export class FetchError extends UserError {}
 
 export interface FetchOptions {
   timeoutMs?: number;
@@ -51,18 +53,11 @@ const safeLookup: LookupFunction = (hostname, options, callback) => {
   });
 };
 
-const HEADERS = {
-  // Many shops serve a bare page, or nothing, to clients that don't look like a browser.
-  'User-Agent':
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
-  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-  'Accept-Language': 'en-IN,en;q=0.9',
-  'Accept-Encoding': 'gzip, deflate, br',
-};
+const HEADERS = { ...BROWSER_HEADERS, 'Accept-Encoding': 'gzip, deflate, br' };
 
 /** Fetches a URL and returns the final URL and the page as text. */
 export async function fetchPage(url: string, opts: FetchOptions = {}): Promise<{ url: string; html: string }> {
-  const { timeoutMs = 12_000, maxBytes = 5_000_000, maxRedirects = 5, allowPrivate = false } = opts;
+  const { timeoutMs = PAGE_TIMEOUT_MS, maxBytes = 5_000_000, maxRedirects = MAX_REDIRECTS, allowPrivate = false } = opts;
   let current = url;
   for (let hop = 0; hop <= maxRedirects; hop++) {
     const target = parseTarget(current, allowPrivate);
@@ -73,18 +68,12 @@ export async function fetchPage(url: string, opts: FetchOptions = {}): Promise<{
       current = new URL(res.headers.location, target).toString();
       continue;
     }
-    if (status === 403 || status === 429 || status === 503) {
-      res.resume();
-      throw new FetchError(`The site refused the request (HTTP ${status}); it may block automatic reading.`);
-    }
-    if (status < 200 || status >= 300) {
-      res.resume();
-      throw new FetchError(`The page could not be loaded (HTTP ${status}).`);
-    }
     const type = String(res.headers['content-type'] ?? '');
-    if (type && !/html|xml/i.test(type)) {
+    try {
+      checkPageResponse(status, type);
+    } catch (e) {
       res.resume();
-      throw new FetchError(`That link is not a web page (${type.split(';')[0]}).`);
+      throw new FetchError((e as Error).message);
     }
     const body = await readBody(res, maxBytes);
     const charset = type.match(/charset=([\w-]+)/i)?.[1] ?? 'utf-8';

@@ -92,6 +92,22 @@ try {
   if (overflow > 0) fail(`phone layout scrolls sideways by ${overflow}px`);
   await phone.screenshot({ path: `${SHOTS}phone.png`, fullPage: true });
 
+  // Phone mode (what the Android app runs): works with the server's API blocked.
+  const device = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true });
+  device.on('pageerror', (e) => errors.push(e.message));
+  await device.addInitScript(() => {
+    window.PRICECOMPARE_DEVICE = true;
+  });
+  let apiCalls = 0;
+  await device.route('**/api/**', (route) => {
+    apiCalls++;
+    return route.abort();
+  });
+  await device.goto(`${BASE}/?q=airdopes`);
+  await device.waitForFunction(() => document.querySelectorAll('article.product tbody tr').length === 3);
+  if (apiCalls) fail(`phone mode called the server ${apiCalls} times`);
+  await device.screenshot({ path: `${SHOTS}device.png`, fullPage: true });
+
   if (errors.length) fail(`browser errors:\n${errors.join('\n')}`);
   console.log('e2e: ok');
 } finally {

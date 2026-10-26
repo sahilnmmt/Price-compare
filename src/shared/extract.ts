@@ -5,10 +5,11 @@
 // sites. Amazon has little of that, so it also gets a reader of its own.
 
 import { parse, type HTMLElement } from 'node-html-parser';
-import type { Listing } from '../shared/types.ts';
-import { detectCurrency, parseCount, parsePrice, parseRating, siteFromUrl } from '../shared/text.ts';
+import { UserError } from './errors.ts';
+import type { Listing } from './types.ts';
+import { detectCurrency, parseCount, parsePrice, parseRating, siteFromUrl } from './text.ts';
 
-export class ExtractError extends Error {}
+export class ExtractError extends UserError {}
 
 type Partial = Omit<Listing, 'site' | 'siteName' | 'url' | 'price' | 'currency' | 'title'> & {
   title?: string;

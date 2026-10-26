@@ -2,8 +2,8 @@
 // Prices, sellers and ratings are made up for demonstration; the app marks
 // them as sample data. Links open the real site's search for the product.
 
-import type { Listing, Seller } from '../../shared/types.ts';
-import { titleTokens } from '../../shared/text.ts';
+import type { Listing, Seller } from '../types.ts';
+import { titleTokens } from '../text.ts';
 import type { Source } from './source.ts';
 
 const SITES = {

@@ -1,6 +1,13 @@
 import './style.css';
-import type { Badge, CompareLinksResponse, Comparison, Listing, Offer, SearchResponse, SourceError } from '../shared/types.ts';
+import { Capacitor } from '@capacitor/core';
+import type { Badge, Comparison, Listing, Offer, SourceError } from '../shared/types.ts';
 import { formatMoney } from '../shared/text.ts';
+import { serverBackend, type Backend } from './backend.ts';
+
+// In the Android app everything runs on the phone; on the website, the server
+// does the work. Tests can force the phone mode with window.PRICECOMPARE_DEVICE.
+const onDevice = Capacitor.isNativePlatform() || (window as { PRICECOMPARE_DEVICE?: boolean }).PRICECOMPARE_DEVICE === true;
+const backend: Promise<Backend> = onDevice ? import('./native.ts').then((m) => m.nativeBackend) : Promise.resolve(serverBackend);
 
 // ---- helpers -------------------------------------------------------------------
 
@@ -15,13 +22,6 @@ function esc(value: unknown): string {
 }
 const $ = <T extends Element = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector(sel) as T;
 const safeUrl = (url: string) => (/^https?:\/\//i.test(url) ? url : '');
-
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, init);
-  const body = await res.json().catch(() => ({ error: `The server answered ${res.status}.` }));
-  if (!res.ok) throw new Error(body.error ?? `The server answered ${res.status}.`);
-  return body as T;
-}
 
 const BADGES: Record<Badge, string> = {
   cheapest: 'Cheapest',
@@ -180,7 +180,7 @@ async function runSearch(query: string) {
   history.replaceState(null, '', url);
   out.innerHTML = '<p class="loading">Comparing shops…</p>';
   try {
-    const r = await api<SearchResponse>(`/api/search?q=${encodeURIComponent(query)}`);
+    const r = await (await backend).search(query);
     if (seq !== searchSeq) return;
     out.innerHTML = '';
     if (r.sample) {
@@ -286,11 +286,7 @@ $('#links-form').addEventListener('submit', async (e) => {
   button.disabled = true;
   out.innerHTML = `<p class="loading">Reading ${urls.length} page${urls.length === 1 ? '' : 's'}…</p>`;
   try {
-    const r = await api<CompareLinksResponse>('/api/compare-links', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ urls, manual }),
-    });
+    const r = await (await backend).compareLinks(urls, manual);
     out.innerHTML = renderErrors(r.errors, 'Some links could not be read. You can add those offers by hand above.');
     if (r.comparison) renderComparisons(out, [r.comparison]);
     else if (!r.errors.length) out.insertAdjacentHTML('beforeend', '<p class="empty">Nothing to compare yet.</p>');

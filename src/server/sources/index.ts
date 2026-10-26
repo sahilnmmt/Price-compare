@@ -1,5 +1,5 @@
-import type { Source } from './source.ts';
-import { sampleSource } from './sample.ts';
+import type { Source } from '../../shared/sources/source.ts';
+import { sampleSource } from '../../shared/sources/sample.ts';
 
 /**
  * The sources searched for every query. Add live sources here, for example an

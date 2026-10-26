@@ -7,18 +7,14 @@
 import { readFile, stat } from 'node:fs/promises';
 import http from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
-import { compareListings } from '../shared/compare.ts';
-import { groupListings } from '../shared/match.ts';
+import { compareLinks, MAX_LINKS, readLink, searchSources } from '../shared/service.ts';
+import type { Source } from '../shared/sources/source.ts';
 import { siteFromUrl } from '../shared/text.ts';
-import type { CompareLinksResponse, Listing, SearchResponse, SourceError } from '../shared/types.ts';
-import { extractListing, ExtractError } from './extract.ts';
-import { fetchPage, FetchError, type FetchOptions } from './fetchPage.ts';
+import type { CompareLinksResponse, Listing } from '../shared/types.ts';
+import { fetchPage, type FetchOptions } from './fetchPage.ts';
 import { enabledSources } from './sources/index.ts';
-import type { Source } from './sources/source.ts';
 
-export const MAX_LINKS = 10;
 const MAX_BODY = 64 * 1024;
-const SEARCH_TIMEOUT_MS = 15_000;
 const PAGE_CACHE_MS = 10 * 60_000;
 /** Links each client may read per minute. Each link is one request to a shop. */
 const LINKS_PER_MINUTE = 30;
@@ -45,36 +41,10 @@ export function createApp(opts: AppOptions = {}): http.Server {
   const pageCache = new Map<string, { at: number; listing: Listing }>();
   const linkBudget = new Map<string, { minute: number; used: number }>();
 
-  async function search(query: string): Promise<SearchResponse> {
-    const errors: SourceError[] = [];
-    const signal = AbortSignal.timeout(SEARCH_TIMEOUT_MS);
-    const results = await Promise.all(
-      sources.map(async (s) => {
-        try {
-          return await s.search(query, signal);
-        } catch (e) {
-          errors.push({ source: s.name, message: (e as Error).message });
-          return [];
-        }
-      }),
-    );
-    const listings = results.flat();
-    const products = groupListings(listings)
-      .map(compareListings)
-      .filter((c) => c !== null);
-    return {
-      query,
-      products,
-      errors,
-      sample: sources.some((s, i) => s.sample && results[i].length > 0),
-    };
-  }
-
-  async function readLink(url: string): Promise<Listing> {
+  async function readCached(url: string): Promise<Listing> {
     const cached = pageCache.get(url);
     if (cached && Date.now() - cached.at < PAGE_CACHE_MS) return cached.listing;
-    const page = await (opts.fetchPage ?? fetchPage)(url, opts.fetch);
-    const listing = extractListing(page.html, page.url);
+    const listing = await readLink((u) => (opts.fetchPage ?? fetchPage)(u, opts.fetch), url);
     pageCache.set(url, { at: Date.now(), listing });
     if (pageCache.size > 500) pageCache.delete(pageCache.keys().next().value!);
     return listing;
@@ -91,24 +61,10 @@ export function createApp(opts: AppOptions = {}): http.Server {
     if (linkBudget.size > 10_000) linkBudget.clear();
   }
 
-  async function compareLinks(body: unknown, client: string): Promise<CompareLinksResponse> {
+  async function handleCompareLinks(body: unknown, client: string): Promise<CompareLinksResponse> {
     const { urls, manual } = validateCompareRequest(body);
     spendLinkBudget(client, urls.length);
-    const errors: SourceError[] = [];
-    const read = await Promise.all(
-      urls.map(async (url) => {
-        try {
-          return await readLink(url);
-        } catch (e) {
-          const known = e instanceof FetchError || e instanceof ExtractError;
-          if (!known) console.error(`reading ${url}:`, e);
-          errors.push({ source: url, message: known ? (e as Error).message : 'Something went wrong reading this page.' });
-          return undefined;
-        }
-      }),
-    );
-    const listings = [...read.filter((l) => l !== undefined), ...manual];
-    return { comparison: compareListings(listings), errors, listings };
+    return compareLinks(urls, manual, readCached);
   }
 
   return http.createServer(async (req, res) => {
@@ -117,12 +73,12 @@ export function createApp(opts: AppOptions = {}): http.Server {
       if (url.pathname === '/api/health') return sendJson(res, 200, { ok: true });
       if (url.pathname === '/api/search' && req.method === 'GET') {
         const q = (url.searchParams.get('q') ?? '').slice(0, 200);
-        return sendJson(res, 200, await search(q));
+        return sendJson(res, 200, await searchSources(sources, q));
       }
       if (url.pathname === '/api/compare-links') {
         if (req.method !== 'POST') throw new HttpError(405, 'Use POST.');
         const client = req.socket.remoteAddress ?? 'unknown';
-        return sendJson(res, 200, await compareLinks(await readJson(req), client));
+        return sendJson(res, 200, await handleCompareLinks(await readJson(req), client));
       }
       if (url.pathname.startsWith('/api/')) throw new HttpError(404, 'Not found.');
       if (opts.staticDir && (req.method === 'GET' || req.method === 'HEAD')) return await serveStatic(opts.staticDir, url.pathname, res);

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { compareListings } from '../src/shared/compare.ts';
 import { groupListings } from '../src/shared/match.ts';
 import type { Listing } from '../src/shared/types.ts';
-import { sampleListings } from '../src/server/sources/sample.ts';
+import { sampleListings } from '../src/shared/sources/sample.ts';
 
 const listing = (over: Partial<Listing>): Listing => ({
   site: 'shop.in',

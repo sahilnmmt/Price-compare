@@ -45,6 +45,8 @@ a { color: var(--accent); }
 .muted { color: var(--muted); font-size: 13px; }
 
 .top { background: var(--card); border-bottom: 1px solid var(--line); padding: 14px 0; margin-bottom: 20px; }
+/* In the Android app the page runs edge to edge; keep clear of the status and navigation bars. */
+.top { padding-top: calc(14px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))); }
 .brand { font-size: 22px; font-weight: 800; color: var(--accent); text-decoration: none; }
 .brand span { color: var(--text); }
 .tagline { margin: 2px 0 0; color: var(--muted); }
@@ -130,7 +132,10 @@ tr.is-cheapest .bar span { background: var(--good); }
 }
 .go { white-space: nowrap; font-weight: 600; }
 
-.foot { color: var(--muted); font-size: 13px; padding-top: 8px; padding-bottom: 32px; }
+.foot {
+  color: var(--muted); font-size: 13px; padding-top: 8px;
+  padding-bottom: calc(32px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+}
 
 /* Phones: each offer becomes a small card. */
 @media (max-width: 760px) {

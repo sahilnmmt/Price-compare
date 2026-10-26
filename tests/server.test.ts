@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 import { createApp } from '../src/server/app.ts';
 import { FetchError } from '../src/server/fetchPage.ts';
-import { sampleSource } from '../src/server/sources/sample.ts';
+import { sampleSource } from '../src/shared/sources/sample.ts';
 import type { CompareLinksResponse, SearchResponse } from '../src/shared/types.ts';
 
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');

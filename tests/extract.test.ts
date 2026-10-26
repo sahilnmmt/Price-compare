@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { extractListing, ExtractError } from '../src/server/extract.ts';
+import { extractListing, ExtractError } from '../src/shared/extract.ts';
 
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8');
 

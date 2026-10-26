@@ -1,4 +1,4 @@
-import type { Listing } from '../../shared/types.ts';
+import type { Listing } from '../types.ts';
 
 /**
  * Somewhere products can be searched: a shop's official API, a price feed, or
